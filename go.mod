@@ -7,7 +7,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/pkg/sftp v1.13.7
 	github.com/romana/rlog v0.0.0-20220412051723-c08f605858a9
-	golang.org/x/crypto v0.30.0
+	golang.org/x/crypto v0.31.0
 )
 
 require (
