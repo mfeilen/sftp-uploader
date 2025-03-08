@@ -20,12 +20,21 @@ SFTP_PORT=22
 SFTP_USER=remoteuser
 SFTP_PASSWORD=somehardpassord
 
-# If no SFTP jail but homedir, use the full path to homeDir, not ~
-SFTP_TARGET_DIR=/uploads
-
 # SFTP priv key auth
 SFTP_PRIV_KEY_FILE=/home/me/id_rsa.pub
 SFTP_PRIV_KEY_PASSWORD=someStrongKeyPassword
+
+# FTPs server credentials
+FTPS_HOST=myserver
+FTPS_PORT=21
+FTPS_USER=remoteuser
+FTPS_PASSWORD=somehardpassord
+
+# FTPs/SFTP Uplaod directory. If no SFTP jail but homedir, use the full path to homeDir, not ~
+TARGET_DIR=/uploads
+
+# Use sftp or ftps to upload
+CONNECTION_TYPE=sftp
 
 # directory that shall be checked
 WATCH_DIR=/home/me/files/incoming

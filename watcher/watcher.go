@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sftp-uploader/ftps"
 	"sftp-uploader/sftp"
 	"strconv"
 	"strings"
@@ -26,14 +27,12 @@ var watchDir string
 var archiveDir string
 var failedDir string
 var shutDownAfterXerrors int
+var connectionType string
+var uploader Uploader
 
 func Start() error {
 
 	var wg sync.WaitGroup
-
-	if err := sftp.Init(); err != nil {
-		return err
-	}
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -96,6 +95,17 @@ func Start() error {
 
 // Init watcher configuration
 func Init() error {
+
+	connectionType = strings.ToLower(os.Getenv(`CONNECTION_TYPE`))
+
+	switch connectionType {
+	case `sftp`:
+		uploader = new(sftp.Uploader)
+	case `ftps`:
+		uploader = new(ftps.Uploader)
+	}
+
+	uploader.Init()
 
 	shutDownAfterXerrors = func() int {
 		if os.Getenv(`SHUT_DOWN_AFTER_ERRORS`) == `` {
@@ -183,7 +193,7 @@ func handleNewFile(fileName string, errChan chan error) {
 		if isFileComplete(fileName) {
 			rlog.Infof("File %s seems to be complete.", fileName)
 
-			err := sftp.Upload(fileName)
+			err := uploader.Upload(fileName)
 			if err != nil {
 				moveFailedFile(fileName)
 				errChan <- err

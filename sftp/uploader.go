@@ -14,14 +14,16 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 )
 
-var host, user, password string
-var port int
-var sshConfig *ssh.ClientConfig
-var remoteDir string
+type Uploader struct {
+	host, user, password string
+	port                 int
+	sshConfig            *ssh.ClientConfig
+	remoteDir            string
+}
 
 // Init the uploader
-func Init() error {
-	if err := setSshConfig(); err != nil {
+func (u *Uploader) Init() error {
+	if err := u.setConfig(); err != nil {
 		return err
 	}
 
@@ -29,43 +31,43 @@ func Init() error {
 	return nil
 }
 
-// setSshConfig for the remote ssh / sftp server
-func setSshConfig() error {
+// setConfig for the remote ssh / sftp server
+func (u *Uploader) setConfig() error {
 
 	// set host config
 	var err error
-	port, err = strconv.Atoi(os.Getenv(`SFTP_PORT`))
+	u.port, err = strconv.Atoi(os.Getenv(`SFTP_PORT`))
 	if err != nil {
 		rlog.Infof(`Given remote server port is invalid, falling back to default SSH Port (22)`)
-		port = 22
+		u.port = 22
 	}
 
-	host = os.Getenv(`SFTP_HOST`)
-	if host == `` {
+	u.host = os.Getenv(`SFTP_HOST`)
+	if u.host == `` {
 		rlog.Infof(`No remote server hostname set, assuming 'localhost'`)
-		host = `localhost`
+		u.host = `localhost`
 	}
 
-	remoteDir = os.Getenv(`SFTP_TARGET_DIR`)
-	remoteDir = strings.TrimSuffix(remoteDir, "/") // remove trailing slash if any
-	if remoteDir == `` {
-		rlog.Infof(`No SFTP_TARGET_DIR provided, assuming /uploads/ as remote directory`)
+	u.remoteDir = os.Getenv(`TARGET_DIR`)
+	u.remoteDir = strings.TrimSuffix(u.remoteDir, "/") // remove trailing slash if any
+	if u.remoteDir == `` {
+		rlog.Infof(`No TARGET_DIR provided, assuming / as remote directory`)
 	}
 
 	// set credentials
-	user = os.Getenv(`SFTP_USER`)
-	if user == `` {
+	u.user = os.Getenv(`SFTP_USER`)
+	if u.user == `` {
 		return fmt.Errorf(`user not set. Cannot continue`)
 	}
 
 	// set port or either to default 22 / SSH
 	// Create ssh client configuration
-	authMethod, err := getAuthMethod()
+	authMethod, err := u.getAuthMethod()
 	if err != nil {
 		return err
 	}
-	sshConfig = &ssh.ClientConfig{
-		User:            user,
+	u.sshConfig = &ssh.ClientConfig{
+		User:            u.user,
 		Auth:            authMethod,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
@@ -77,19 +79,19 @@ func setSshConfig() error {
 		if err != nil {
 			rlog.Warnf(`Known Hosts file not found in %s, because %v.`, knownHostsFile, err)
 		}
-		sshConfig.HostKeyCallback = hostKeyCallback
+		u.sshConfig.HostKeyCallback = hostKeyCallback
 
 	} else {
 		rlog.Warnf(`KNOWN_HOSTS not set. Falling back to unchecked hostKeys`)
 	}
 
-	rlog.Infof("Using SFTP %s:%d", host, port)
+	rlog.Infof("Using SFTP %s:%d", u.host, u.port)
 
 	return nil
 }
 
 // getAuthMethod depending on configuration
-func getAuthMethod() ([]ssh.AuthMethod, error) {
+func (u *Uploader) getAuthMethod() ([]ssh.AuthMethod, error) {
 
 	auth := []ssh.AuthMethod{}
 
@@ -107,11 +109,11 @@ func getAuthMethod() ([]ssh.AuthMethod, error) {
 	}
 
 	// use password if defined
-	password = os.Getenv(`SFTP_PASSWORD`)
-	if password == `` {
+	u.password = os.Getenv(`SFTP_PASSWORD`)
+	if u.password == `` {
 		return auth, errors.New(`no password and no private key available. No authentication possible`)
 	}
-	auth = append(auth, ssh.Password(password))
+	auth = append(auth, ssh.Password(u.password))
 	rlog.Infof(`Will use password authentication`)
 	return auth, nil
 }
@@ -139,13 +141,14 @@ func publicKeyAuth(keyPath string) (ssh.AuthMethod, error) {
 }
 
 // PushFile to SFTP-Server
-func Upload(fileName string) error {
+func (u *Uploader) Upload(fileName string) error {
 
 	rlog.Info(`Start uploading file to remote ...`)
+
 	// Establish SSH connection
-	conn, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", host, port), sshConfig)
+	conn, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", u.host, u.port), u.sshConfig)
 	if err != nil {
-		return fmt.Errorf("error creating SFTP-Connection, because: %w", err)
+		return fmt.Errorf("error creating SFTP connection, because: %w", err)
 	}
 	defer conn.Close()
 
@@ -163,7 +166,7 @@ func Upload(fileName string) error {
 	}
 	defer srcFile.Close()
 
-	remoteTargetDir := remoteDir + `/` + filepath.Base(fileName)
+	remoteTargetDir := u.remoteDir + `/` + filepath.Base(fileName)
 	dstFile, err := client.Create(remoteTargetDir)
 	if err != nil {
 		return fmt.Errorf("error creating file on SFTP server in %s because: %w", remoteTargetDir, err)
