@@ -5,7 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"sftp-uploader/sftp"
+	"sftp-uploader/connectors"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,14 +26,12 @@ var watchDir string
 var archiveDir string
 var failedDir string
 var shutDownAfterXerrors int
+var connectorType string
+var uploader connectors.Uploader
 
 func Start() error {
 
 	var wg sync.WaitGroup
-
-	if err := sftp.Init(); err != nil {
-		return err
-	}
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -96,6 +94,23 @@ func Start() error {
 
 // Init watcher configuration
 func Init() error {
+
+	connectorType = strings.ToLower(os.Getenv(`CONNECTOR_TYPE`))
+
+	switch connectorType {
+	case `sftp`:
+		uploader = &connectors.Sftp{}
+	case `ftps`:
+		uploader = &connectors.Ftps{}
+	default:
+		return fmt.Errorf(`unknown connector type %s connector`, connectorType)
+	}
+
+	rlog.Warnf(`using connector %s`, connectorType)
+
+	if err := uploader.Init(); err != nil {
+		return err
+	}
 
 	shutDownAfterXerrors = func() int {
 		if os.Getenv(`SHUT_DOWN_AFTER_ERRORS`) == `` {
@@ -183,7 +198,7 @@ func handleNewFile(fileName string, errChan chan error) {
 		if isFileComplete(fileName) {
 			rlog.Infof("File %s seems to be complete.", fileName)
 
-			err := sftp.Upload(fileName)
+			err := uploader.Upload(fileName)
 			if err != nil {
 				moveFailedFile(fileName)
 				errChan <- err
