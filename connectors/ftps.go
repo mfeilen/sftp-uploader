@@ -42,6 +42,11 @@ func (f *Ftps) Upload(fileName string) error {
 	}
 	defer uploadFile.Close()
 
+	localStat, err := uploadFile.Stat()
+	if err != nil {
+		return fmt.Errorf("error stat'ing local file: %v", err)
+	}
+
 	// Connect to the FTP server using TLS encryption.
 	ftpdialoption := ftp.DialWithExplicitTLS(f.tlsConfig)
 
@@ -70,7 +75,16 @@ func (f *Ftps) Upload(fileName string) error {
 	// now upload
 	remoteTargetDir := f.remoteDir + filepath.Base(fileName)
 	if err := conn.Stor(remoteTargetDir, uploadFile); err != nil {
-		return fmt.Errorf("error uploading file %s new SFTP client, because : %w", filepath.Base(fileName), err)
+		return fmt.Errorf("error uploading file %s new FTPs client, because : %w", filepath.Base(fileName), err)
+	}
+
+	remoteSize, err := conn.FileSize(remoteTargetDir)
+	if err != nil {
+		return fmt.Errorf("error uploading file %s new FTPs client, because : %w", filepath.Base(fileName), err)
+	}
+
+	if localStat.Size() != remoteSize {
+		return fmt.Errorf("file size mismatch after upload: local %d bytes, remote %d bytes", localStat.Size(), remoteSize)
 	}
 
 	rlog.Infof(`File %s was successfully uploaded to %s.`, filepath.Base(fileName), f.host)
